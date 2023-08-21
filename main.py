@@ -19,7 +19,7 @@ def clone_and_create_superimport(source_wbox, source_meta, destination_directory
         zip_ref.write(source_meta, 'map.meta')
 
     print(f'Superimport file created: {superimport_path}')
-    
+
     # Remove the source map.wbox and map.meta files
     os.remove(source_wbox)
     os.remove(source_meta)
@@ -31,19 +31,6 @@ def clone_and_create_superimport(source_wbox, source_meta, destination_directory
 check_worldbox_installation()
 
 def main():
-    importhere_directory = '/storage/emulated/0/WorldboxSuperSaver/importhere'
-    importhere_files = os.listdir(importhere_directory)
-    found_superimport = False
-
-    for filename in importhere_files:
-        if filename.endswith('.superimport'):
-            superimport_path = os.path.join(importhere_directory, filename)
-            import_superimport(superimport_path, '/storage/emulated/0/WorldboxSuperSaver/worldboxsaves')
-            found_superimport = True
-
-    if not found_superimport:
-        print("No superimport files found in the importhere directory.")
-
     while True:
         operation = input("Enter 'convert' to convert, 'export' to export, 'import' to import, 'load' to load, or 'exit' to quit: ")
         
@@ -62,20 +49,28 @@ def main():
             destination_directory = '/storage/emulated/0/WorldboxSuperSaver/exports'
             
             clone_and_create_superimport(source_wbox, source_meta, destination_directory, superimport_name)
-            
+	
         elif operation == 'import':
             importhere_directory = '/storage/emulated/0/WorldboxSuperSaver/importhere'
-            importhere_files = os.listdir(importhere_directory)
-            found_superimport = False
+            importhere_files = [filename for filename in os.listdir(importhere_directory) if filename.endswith('.superimport')]
 
-            for filename in importhere_files:
-                if filename.endswith('.superimport'):
-                    superimport_path = os.path.join(importhere_directory, filename)
-                    import_superimport(superimport_path, '/storage/emulated/0/WorldboxSuperSaver/worldboxsaves')
-                    found_superimport = True
-
-            if not found_superimport:
+            if not importhere_files:
                 print("No superimport files found in the importhere directory.")
+                continue
+
+            print("Available superimport files:")
+            for idx, filename in enumerate(importhere_files, start=1):
+                print(f"{idx}. {filename}")
+
+            selected_idx = int(input("Enter the number of the superimport file you want to import: ")) - 1
+
+            if selected_idx < 0 or selected_idx >= len(importhere_files):
+                print("Invalid selection.")
+                continue
+
+            selected_superimport = importhere_files[selected_idx]
+            superimport_path = os.path.join(importhere_directory, selected_superimport)
+            import_superimport(superimport_path, '/storage/emulated/0/WorldboxSuperSaver/worldboxsaves')
             
         elif operation == 'load':
             destination = '/storage/emulated/0/Android/data/com.mkarpenko.worldbox/files/saves/save1'
@@ -92,7 +87,40 @@ def main():
                 
                 if copy_files(src_folder, destination):
                     break
-                
+                    
+                    
+        elif operation == 'overwrite':
+            source_wbox = '/storage/emulated/0/Android/data/com.mkarpenko.worldbox/files/saves/save1/map.wbox'
+            source_meta = '/storage/emulated/0/Android/data/com.mkarpenko.worldbox/files/saves/save1/map.meta'
+
+            destination_save_folder = '/storage/emulated/0/WorldboxSuperSaver/worldboxsaves'
+            destination_save_name = input("Enter the name of the save to overwrite (e.g., 'example'): ")
+
+            destination_wbox = os.path.join(destination_save_folder, destination_save_name, 'map.wbox')
+            destination_meta = os.path.join(destination_save_folder, destination_save_name, 'map.meta')
+
+            if not os.path.exists(source_wbox) or not os.path.exists(source_meta):
+                print("Source files not found.")
+            elif not os.path.exists(destination_wbox) or not os.path.exists(destination_meta):
+                print("Destination save not found.")
+            else:
+                # Delete contents of the destination save folder
+                for filename in os.listdir(destination_wbox):
+                    file_path = os.path.join(destination_wbox, filename)
+                    os.remove(file_path)
+
+                for filename in os.listdir(destination_meta):
+                    file_path = os.path.join(destination_meta, filename)
+                    os.remove(file_path)
+
+                # Copy source files to the destination save folder
+                shutil.copy2(source_wbox, destination_wbox)
+                shutil.copy2(source_meta, destination_meta)
+
+                print("Save contents overwritten.")
+
+        elif operation == 'credits':
+           print('Thanks for Installing, I spent alot of time on this software, It really brings alot to me for this summer project I just made this since I was too poor to afford premium and I was too lazy to import maps, goodbye and thank you. -AKI')
         elif operation == 'exit':
             exit()
             
@@ -117,61 +145,44 @@ def copy_files(src_folder, dest_dir):
     else:
         print('Invalid source folder or missing files.')
         return False
-
+        
 def import_superimport(superimport_path, destination_directory):
-    print("Importing superimport...")
-
     # Rename the superimport file to a zip
     zip_path = superimport_path.replace('.superimport', '.zip')
     os.rename(superimport_path, zip_path)
 
+    # Extract the superimport name without the extension
+    superimport_name = os.path.basename(zip_path).replace('.zip', '')
+
+    # Find a suitable folder name with a suffix
+    folder_name = superimport_name
+    suffix_count = 2
+    while os.path.exists(os.path.join(destination_directory, folder_name)):
+        folder_name = f'{superimport_name}_{suffix_count}'
+        suffix_count += 1
+
+    # Create the folder for the imported superimport files
+    imported_folder = os.path.join(destination_directory, folder_name)
+    os.makedirs(imported_folder)
+
     # Unzip the zip file
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(destination_directory)
+        zip_ref.extractall(imported_folder)
 
     # Delete the zip file
     os.remove(zip_path)
 
-    print("Zip extracted and deleted.")
+    # Delete map.wbox and map.meta files from worldboxsaves folder
+    worldboxsaves_wbox = os.path.join(destination_directory, 'map.wbox')
+    worldboxsaves_meta = os.path.join(destination_directory, 'map.meta')
+    
+    if os.path.exists(worldboxsaves_wbox):
+        os.remove(worldboxsaves_wbox)
+    if os.path.exists(worldboxsaves_meta):
+        os.remove(worldboxsaves_meta)
 
-    # Get the map.wbox and map.meta paths
-    extracted_wbox = os.path.join(destination_directory, 'map.wbox')
-    extracted_meta = os.path.join(destination_directory, 'map.meta')
+    print(f'Superimport imported to: {imported_folder}')
 
-    print("Extracted files identified.")
-
-    # Determine the new save folder name
-    worldboxsaves_directory = '/storage/emulated/0/WorldboxSuperSaver/worldboxsaves'
-    save_folders = [folder for folder in os.listdir(worldboxsaves_directory) if folder.startswith('save')]
-    new_save_folder_name = f'save{len(save_folders) + 1}' if len(save_folders) > 0 else 'save1'
-
-    print(f"New save folder name: {new_save_folder_name}")
-
-    # Create the new folder in worldboxsaves in the supersaver directory
-    new_save_folder_path = os.path.join(worldboxsaves_directory, new_save_folder_name)
-    os.makedirs(new_save_folder_path, exist_ok=True)
-
-    print(f"New save folder created: {new_save_folder_path}")
-
-    # Copy map.wbox and map.meta to the new folder
-    shutil.copy2(extracted_wbox, os.path.join(new_save_folder_path, 'map.wbox'))
-    shutil.copy2(extracted_meta, os.path.join(new_save_folder_path, 'map.meta'))
-
-    print("Files copied to new save folder.")
-
-    # Remove any extra files created during the extraction
-    extra_wbox_path = os.path.join(destination_directory, 'map.wbox')
-    extra_meta_path = os.path.join(destination_directory, 'map.meta')
-
-    if os.path.exists(extra_wbox_path):
-        os.remove(extra_wbox_path)
-
-    if os.path.exists(extra_meta_path):
-        os.remove(extra_meta_path)
-
-    print("Extra files removed.")
-
-    print(f'Superimport imported to: {new_save_folder_path}')
 
 if __name__ == '__main__':
     main()
